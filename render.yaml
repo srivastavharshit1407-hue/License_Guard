@@ -34,7 +34,11 @@ services:
     dockerContext: .
     plan: free
     healthCheckPath: /api/schema/
-    preDeployCommand: python manage.py migrate --noinput
+    # preDeployCommand needs a paid plan, so run migrations as part of the
+    # container's start command instead (safe to re-run on every deploy).
+    dockerCommand: >-
+      sh -c "python manage.py migrate --noinput &&
+      gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"
     envVars:
       - key: DJANGO_SECRET_KEY
         generateValue: true
