@@ -62,6 +62,8 @@ services:
         value: "LicenseGuard <alerts@licenseguard.local>"
       - key: CONNECTORS_DEMO_MODE
         value: "True"
+      - key: SIGNUP_ALLOWED_EMAILS
+        value: srivastavharshit1407@gmail.com
       - key: GOOGLE_OAUTH_CLIENT_ID
         sync: false
       - key: GOOGLE_OAUTH_CLIENT_SECRET

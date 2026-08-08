@@ -54,6 +54,9 @@ def get_or_create_user_from_google(claims: dict) -> User:
         user.save(update_fields=["organization", "auth_provider", "avatar_url", "full_name"])
         return user
 
+    if settings.SIGNUP_ALLOWED_EMAILS and email not in settings.SIGNUP_ALLOWED_EMAILS:
+        raise AuthenticationFailed("Signups are currently invite-only.")
+
     org = _resolve_org(domain, claims)
     # First user of a brand new org owns it; everyone after is a viewer by default.
     role = User.Role.OWNER if not org.users.exists() else User.Role.VIEWER

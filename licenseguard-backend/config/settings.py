@@ -194,6 +194,10 @@ GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 GOOGLE_OAUTH_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
 CONNECTORS_DEMO_MODE = env_bool("CONNECTORS_DEMO_MODE", True)
 
+# Comma-separated email allow-list for self-signup. Empty (the default)
+# means anyone can sign up; set it to lock signup down to specific people.
+SIGNUP_ALLOWED_EMAILS = [e.lower() for e in env_list("SIGNUP_ALLOWED_EMAILS", "")]
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

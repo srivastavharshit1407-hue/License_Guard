@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from rest_framework import serializers
@@ -32,6 +33,8 @@ class SignupSerializer(serializers.Serializer):
 
     def validate_email(self, value: str) -> str:
         value = value.lower().strip()
+        if settings.SIGNUP_ALLOWED_EMAILS and value not in settings.SIGNUP_ALLOWED_EMAILS:
+            raise serializers.ValidationError("Signups are currently invite-only.")
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("An account with this email already exists.")
         return value
