@@ -25,13 +25,36 @@ class LicensePoolSerializer(serializers.ModelSerializer):
             "renewal_date", "notes", "last_synced_at", "is_active",
             "created_at", "updated_at",
         )
-        read_only_fields = ("id", "last_synced_at", "created_at", "updated_at")
+        read_only_fields = ("id", "external_id", "source", "last_synced_at", "created_at", "updated_at")
 
     def validate_application(self, value: Application) -> Application:
         request = self.context.get("request")
         if request and value.organization_id != request.user.organization_id:
             raise serializers.ValidationError("That application belongs to another organization.")
         return value
+
+    def validate(self, attrs):
+        """
+        A connector owns identity/usage fields for pools it syncs - editing them
+        here would just get silently clobbered on the next sync (or worse,
+        break the match-on-external_id lookup in _upsert_pool). Reject attempts
+        to change them instead of pretending the edit stuck. total_seats is the
+        one exception that's sometimes editable: only when this specific vendor
+        genuinely cannot supply the purchased-seat count (total_seats_is_synced
+        is False), which is a real platform limitation, not a choice this app
+        makes - see PoolData.total_seats in apps/connectors/base.py.
+        """
+        instance = self.instance
+        if instance and instance.source not in (LicensePool.Source.MANUAL, LicensePool.Source.CSV):
+            locked_fields = ["application", "name", "sku", "used_seats"]
+            if instance.total_seats_is_synced:
+                locked_fields.append("total_seats")
+            for field in locked_fields:
+                if field in attrs and attrs[field] != getattr(instance, field):
+                    raise serializers.ValidationError({
+                        field: "Synced from the vendor connection - can't be edited manually."
+                    })
+        return attrs
 
 
 class LicenseAssignmentSerializer(serializers.ModelSerializer):

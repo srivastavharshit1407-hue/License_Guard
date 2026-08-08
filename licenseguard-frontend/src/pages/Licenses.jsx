@@ -11,6 +11,11 @@ const BLANK = {
 const money = (value, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value || 0)
 
+// Read-only stand-in for an <input>, used for fields a connector owns.
+const LockedValue = ({ children }) => (
+  <div className="input flex items-center bg-ink-50 text-ink-500">{children}</div>
+)
+
 export default function Licenses() {
   const [pools, setPools] = useState([])
   const [apps, setApps] = useState([])
@@ -38,17 +43,28 @@ export default function Licenses() {
   }
   const update = (key) => (e) => setForm({ ...form, [key]: e.target.value })
 
+  // A connector owns identity/usage for pools it syncs. Editing those here
+  // would just get silently clobbered on the next sync (or reject with a
+  // 400 from the serializer's lock-down) - so don't even send them.
+  const isSynced = editing !== 'new' && form.source && form.source !== 'manual' && form.source !== 'csv'
+
   const save = async (event) => {
     event.preventDefault()
     setSaving(true); setError('')
     try {
       const payload = {
-        application: form.application, name: form.name, sku: form.sku,
-        total_seats: Number(form.total_seats) || 0,
-        used_seats: Number(form.used_seats) || 0,
         unit_cost: Number(form.unit_cost) || 0,
         currency: form.currency, billing_cycle: form.billing_cycle,
         renewal_date: form.renewal_date || null, notes: form.notes,
+      }
+      if (!isSynced) {
+        payload.application = form.application
+        payload.name = form.name
+        payload.sku = form.sku
+        payload.used_seats = Number(form.used_seats) || 0
+      }
+      if (!isSynced || !form.total_seats_is_synced) {
+        payload.total_seats = Number(form.total_seats) || 0
       }
       if (editing === 'new') await api.post('/license-pools/', payload)
       else await api.patch(`/license-pools/${editing}/`, payload)
@@ -149,33 +165,60 @@ export default function Licenses() {
 
       {editing && (
         <Modal wide title={editing === 'new' ? 'Add licence pool' : 'Edit licence pool'} onClose={() => setEditing(null)}>
+          {isSynced && (
+            <p className="-mt-2 mb-4 text-xs text-ink-500">
+              Synced from your {form.source.replace(/_/g, ' ')} connection - identity and usage fields
+              below are locked; only cost and renewal details are yours to edit.
+            </p>
+          )}
           <form onSubmit={save} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="label">Application</label>
-                <select required className="input" value={form.application} onChange={update('application')}>
-                  <option value="">Select...</option>
-                  {apps.map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}
-                </select>
+                {isSynced ? (
+                  <LockedValue>{form.application_name}</LockedValue>
+                ) : (
+                  <select required className="input" value={form.application} onChange={update('application')}>
+                    <option value="">Select...</option>
+                    {apps.map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}
+                  </select>
+                )}
               </div>
               <div>
                 <label className="label">Pool name</label>
-                <input required className="input" value={form.name} onChange={update('name')} placeholder="Business Standard" />
+                {isSynced ? <LockedValue>{form.name}</LockedValue> : (
+                  <input required className="input" value={form.name} onChange={update('name')} placeholder="Business Standard" />
+                )}
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
                 <label className="label">Seats purchased</label>
-                <input type="number" min="0" className="input" value={form.total_seats} onChange={update('total_seats')} />
+                {isSynced && form.total_seats_is_synced ? <LockedValue>{form.total_seats}</LockedValue> : (
+                  <input type="number" min="0" className="input" value={form.total_seats} onChange={update('total_seats')} />
+                )}
+                {isSynced && !form.total_seats_is_synced && (
+                  <p className="mt-1 text-xs text-ink-500">
+                    {form.source.replace(/_/g, ' ')} has no API for this - keep it up to date by hand.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="label">Seats used</label>
-                <input type="number" min="0" className="input" value={form.used_seats} onChange={update('used_seats')} />
-                <p className="mt-1 text-xs text-ink-500">Overwritten on each sync for connected vendors.</p>
+                {isSynced ? (
+                  <>
+                    <LockedValue>{form.used_seats}</LockedValue>
+                    <p className="mt-1 text-xs text-ink-500">Synced automatically - updates on each sync.</p>
+                  </>
+                ) : (
+                  <input type="number" min="0" className="input" value={form.used_seats} onChange={update('used_seats')} />
+                )}
               </div>
               <div>
                 <label className="label">SKU</label>
-                <input className="input" value={form.sku} onChange={update('sku')} />
+                {isSynced ? <LockedValue>{form.sku || '—'}</LockedValue> : (
+                  <input className="input" value={form.sku} onChange={update('sku')} />
+                )}
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-4">
