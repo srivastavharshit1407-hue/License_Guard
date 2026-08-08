@@ -1,0 +1,108 @@
+# Render Blueprint for LicenseGuard's Django backend.
+#
+# This file lives at the repo ROOT (Render's default lookup path for
+# Blueprints), even though the app itself lives in licenseguard-backend/ -
+# see `rootDir` below, which tells Render where the Dockerfile/build
+# context actually is.
+#
+# Setup (no CLI, no card needed for these two services):
+#   1. https://dashboard.render.com -> New + -> Blueprint
+#   2. Connect the srivastavharshit1407-hue/License_Guard repo, branch main
+#   3. Render finds this file and proposes: a web service + a Postgres db.
+#   4. Fill in the "sync: false" env vars below when prompted (Render
+#      won't let you apply without them), then click Apply.
+#   5. Once live, copy the service URL (https://licenseguard-api.onrender.com)
+#      into Vercel's VITE_API_URL and redeploy the frontend.
+#
+# Free-tier caveats: the web service spins down after ~15 min idle (first
+# request after that takes 30-50s to wake up), and the free Postgres
+# instance expires after Render's free trial window - check
+# https://render.com/pricing for the current limit before you rely on it.
+#
+# Celery worker/beat + Redis are commented out below because Render's
+# background workers and managed Redis are paid-only (no free plan). Add a
+# card and uncomment that block once you're ready for background jobs
+# (connector syncs, alert emails) to actually run - until then the API and
+# admin work fine, they just won't process scheduled/background tasks.
+
+services:
+  - type: web
+    name: licenseguard-api
+    runtime: docker
+    rootDir: licenseguard-backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /api/schema/
+    preDeployCommand: python manage.py migrate --noinput
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: licenseguard-api.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://license-guard-omega.vercel.app
+      - key: FRONTEND_URL
+        value: https://license-guard-omega.vercel.app
+      - key: CREDENTIALS_ENCRYPTION_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: licenseguard-db
+          property: connectionString
+      - key: EMAIL_BACKEND
+        value: django.core.mail.backends.console.EmailBackend
+      - key: DEFAULT_FROM_EMAIL
+        value: "LicenseGuard <alerts@licenseguard.local>"
+      - key: CONNECTORS_DEMO_MODE
+        value: "True"
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+
+  # --- Uncomment once you're ready to pay for background jobs ---
+  # - type: worker
+  #   name: licenseguard-worker
+  #   runtime: docker
+  #   rootDir: licenseguard-backend
+  #   dockerfilePath: ./Dockerfile
+  #   dockerContext: .
+  #   dockerCommand: celery -A config worker -l info
+  #   plan: starter
+  #   envVars:
+  #     - key: CELERY_BROKER_URL
+  #       fromService: { type: redis, name: licenseguard-redis, property: connectionString }
+  #     - key: CELERY_RESULT_BACKEND
+  #       fromService: { type: redis, name: licenseguard-redis, property: connectionString }
+  #     - key: DATABASE_URL
+  #       fromDatabase: { name: licenseguard-db, property: connectionString }
+  #
+  # - type: worker
+  #   name: licenseguard-beat
+  #   runtime: docker
+  #   rootDir: licenseguard-backend
+  #   dockerfilePath: ./Dockerfile
+  #   dockerContext: .
+  #   dockerCommand: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+  #   plan: starter
+  #   envVars:
+  #     - key: CELERY_BROKER_URL
+  #       fromService: { type: redis, name: licenseguard-redis, property: connectionString }
+  #     - key: CELERY_RESULT_BACKEND
+  #       fromService: { type: redis, name: licenseguard-redis, property: connectionString }
+  #     - key: DATABASE_URL
+  #       fromDatabase: { name: licenseguard-db, property: connectionString }
+  #
+  # - type: redis
+  #   name: licenseguard-redis
+  #   plan: starter
+  #   ipAllowList: []
+
+databases:
+  - name: licenseguard-db
+    plan: free
+    databaseName: licenseguard
+    user: licenseguard
