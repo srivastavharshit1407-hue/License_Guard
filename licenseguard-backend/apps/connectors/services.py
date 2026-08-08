@@ -37,8 +37,10 @@ def sync_connection(connection: Connection) -> SyncRun:
         pools = connector.fetch_license_pools()
 
         created = updated = assignments_synced = 0
+        seen_pool_ids = set()
         for pool_data in pools:
             pool, was_created = _upsert_pool(connection, pool_data)
+            seen_pool_ids.add(pool.pk)
             created += was_created
             updated += not was_created
             try:
@@ -47,6 +49,19 @@ def sync_connection(connection: Connection) -> SyncRun:
                 )
             except Exception as exc:  # assignment detail is best-effort
                 logger.warning("Assignment sync failed for %s: %s", pool, exc)
+
+        # Remove pools this connection used to report but no longer does (e.g.
+        # a cancelled SKU, or leftovers from an earlier demo-mode sync). Only
+        # when the fetch actually returned something - an empty `pools` list
+        # is more likely a hidden connector error than "you now have zero
+        # licenses", and we should never wipe real data on that ambiguity.
+        if pools:
+            stale = LicensePool.objects.filter(
+                organization=connection.organization, source=connection.provider
+            ).exclude(pk__in=seen_pool_ids)
+            if stale.exists():
+                logger.info("Removing %d stale pool(s) for connection %s", stale.count(), connection.pk)
+                stale.delete()
 
         connection.status = Connection.Status.CONNECTED
         connection.last_sync_at = timezone.now()
