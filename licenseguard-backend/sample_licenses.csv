@@ -1,0 +1,5 @@
+application,vendor,pool_name,sku,total_seats,used_seats,unit_cost,currency,renewal_date
+Notion,Notion Labs,Plus,notion-plus,50,31,10.00,USD,2027-03-01
+Linear,Linear,Standard,linear-std,30,28,8.00,USD,2027-01-15
+1Password,AgileBits,Business,1p-business,120,104,7.99,USD,2026-11-30
+Datadog,Datadog,Pro (hosts),dd-pro,40,37,15.00,USD,2027-06-01

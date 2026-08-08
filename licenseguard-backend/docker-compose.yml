@@ -1,0 +1,22 @@
+# Local infrastructure. You do NOT need this on day one - Django falls back to
+# SQLite and Celery is optional. Start it when you want Postgres + background jobs.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: licenseguard
+      POSTGRES_PASSWORD: licenseguard
+      POSTGRES_DB: licenseguard
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U licenseguard"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+volumes:
+  pgdata:

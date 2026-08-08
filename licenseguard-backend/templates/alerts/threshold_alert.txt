@@ -1,0 +1,13 @@
+LicenseGuard alert
+
+{{ event.message }}
+
+Application : {{ application.name }}
+Licence pool: {{ pool.name }}
+Used seats  : {{ pool.used_seats }} of {{ pool.total_seats }}
+Available   : {{ pool.available_seats }}
+Utilisation : {{ pool.utilization_pct }}%
+
+Triggered by rule "{{ rule.name }}" at {{ event.triggered_at }}.
+
+Open LicenseGuard: {{ frontend_url }}/licenses
